@@ -5,14 +5,12 @@ import * as iam from "aws-cdk-lib/aws-iam";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as s3 from "aws-cdk-lib/aws-s3";
 import { Construct } from "constructs";
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from "fs";
+import * as path from "path";
 
 export class CdkAllInCodeStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
-
-    
 
     // DynamoDBテーブルの作成
     const chainlitTable = new dynamodb.Table(this, "ChainlitTable", {
@@ -65,7 +63,9 @@ export class CdkAllInCodeStack extends cdk.Stack {
     const ec2Role = new iam.Role(this, "EC2Role", {
       assumedBy: new iam.ServicePrincipal("ec2.amazonaws.com"),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName("AmazonSSMManagedInstanceCore"),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          "AmazonSSMManagedInstanceCore"
+        ),
       ],
     });
 
@@ -79,7 +79,7 @@ export class CdkAllInCodeStack extends cdk.Stack {
             "dynamodb:UpdateItem",
             "dynamodb:DeleteItem",
             "dynamodb:Query",
-            "dynamodb:Scan"
+            "dynamodb:Scan",
           ],
           resources: [
             chainlitTable.tableArn,
@@ -119,10 +119,7 @@ export class CdkAllInCodeStack extends cdk.Stack {
             "s3:DeleteObject",
             "s3:ListBucket",
           ],
-          resources: [
-            bucket.bucketArn,
-            `${bucket.bucketArn}/*`,
-          ],
+          resources: [bucket.bucketArn, `${bucket.bucketArn}/*`],
         }),
       ],
     });
@@ -140,23 +137,37 @@ export class CdkAllInCodeStack extends cdk.Stack {
     });
 
     // シェルスクリプトテンプレートの読み込みと加工
-    const templatePath = path.join(__dirname, '../scripts/setup-chainlit.sh.template');
-    const srcDir = path.join(__dirname, '../src');
-    
+    const templatePath = path.join(
+      __dirname,
+      "../scripts/setup-chainlit.sh.template"
+    );
+    const srcDir = path.join(__dirname, "../src");
+
     // テンプレートの読み込み
-    let scriptContent = fs.readFileSync(templatePath, 'utf8');
+    let scriptContent = fs.readFileSync(templatePath, "utf8");
 
     // ソースファイルの内容を生成
-    const sourceFiles = fs.readdirSync(srcDir)
-      .filter(file => file.endsWith('.py'))
-      .map(file => {
-        const content = fs.readFileSync(path.join(srcDir, file), 'utf8');
+    const sourceFiles = fs
+      .readdirSync(srcDir)
+      .filter((file) => file.endsWith(".py"))
+      .map((file) => {
+        const content = fs.readFileSync(path.join(srcDir, file), "utf8");
         return `cat << 'EOF' > ${file}\n${content}\nEOF`;
       })
-      .join('\n\n');
+      .join("\n\n");
+
+    // requirements.txtの内容を生成
+    const requirementsPath = path.join(srcDir, "requirements.txt");
+    const requirementsContent = fs.existsSync(requirementsPath)
+      ? fs.readFileSync(requirementsPath, "utf8")
+      : ""; // requirements.txtが存在しない場合は空文字
+
+    const requirementsFile = `cat << 'EOF' > requirements.txt\n${requirementsContent}\nEOF`;
 
     // テンプレートの置換
-    scriptContent = scriptContent.replace('%SOURCE_FILES%', sourceFiles);
+    scriptContent = scriptContent
+      .replace("%SOURCE_FILES%", sourceFiles)
+      .replace("%REQUIREMENTS_FILE%", requirementsFile);
 
     // EC2のユーザーデータを設定（直接スクリプトを埋め込む）
     const userData = ec2.UserData.forLinux();
@@ -168,20 +179,23 @@ export class CdkAllInCodeStack extends cdk.Stack {
       vpcSubnets: {
         subnetType: ec2.SubnetType.PUBLIC,
       },
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MEDIUM),
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.T3,
+        ec2.InstanceSize.MEDIUM
+      ),
       machineImage: new ec2.AmazonLinuxImage({
         generation: ec2.AmazonLinuxGeneration.AMAZON_LINUX_2023,
       }),
       securityGroup: sg,
       role: ec2Role,
       keyPair,
-      userData:userData
+      userData: userData,
     });
 
     // 出力
     new cdk.CfnOutput(this, "InstanceId", {
       value: instance.instanceId,
       description: "Instance ID for VS Code Remote connection",
-    })
+    });
   }
 }
