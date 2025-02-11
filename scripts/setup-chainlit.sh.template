@@ -1,0 +1,25 @@
+#!/bin/bash
+set -e
+
+# システムパッケージの更新
+sudo yum update -y
+
+# Python関連パッケージのインストール
+sudo yum install -y python3-pip python3-devel
+
+# chainlit用のプロジェクトフォルダを作成
+mkdir -p /home/ec2-user/chainlit-dev
+cd /home/ec2-user/chainlit-dev
+
+# 仮想環境の作成
+python3 -m venv .venv
+source .venv/bin/activate
+
+# 必要なPythonパッケージのインストール
+pip install chainlit boto3 langchain langchain_aws
+
+# ソースファイルの作成
+%SOURCE_FILES%
+
+# 権限の設定
+chown -R ec2-user:ec2-user /home/ec2-user/chainlit-dev
